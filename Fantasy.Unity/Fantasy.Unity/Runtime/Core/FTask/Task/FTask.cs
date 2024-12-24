@@ -5,12 +5,13 @@ using System.Runtime.ExceptionServices;
 // ReSharper disable ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
 // ReSharper disable ConditionalAccessQualifierIsNonNullableAccordingToAPIContract
 // ReSharper disable CheckNamespace
+#pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
 #pragma warning disable CS8602 // Dereference of a possibly null reference.
 #pragma warning disable CS8603 // Possible null reference return.
 #pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
 #pragma warning disable CS8625 // Cannot convert null literal to non-nullable reference type.
 
-namespace Fantasy
+namespace Fantasy.Async
 {
     public enum STaskStatus : byte
     {
@@ -20,13 +21,11 @@ namespace Fantasy
     }
     
     [AsyncMethodBuilder(typeof(AsyncFTaskMethodBuilder))]
-    public sealed partial class FTask : ICriticalNotifyCompletion, IFTask
+    public sealed partial class FTask : ICriticalNotifyCompletion
     {
         private Action _callBack;
         private ExceptionDispatchInfo _exception;
         private STaskStatus _status = STaskStatus.Pending;
-        public FTaskType FTaskType { get; set; }
-        public object UserToKen { get; set; }
         public bool IsCompleted
         {
             [DebuggerHidden]
@@ -49,24 +48,7 @@ namespace Fantasy
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Coroutine()
         {
-            this.InnerSetUserToken(null);
             InnerCoroutine().Coroutine();
-        }
-        
-        [DebuggerHidden]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Coroutine(object userToken)
-        {
-            this.InnerSetUserToken(userToken);
-            InnerCoroutine().Coroutine();
-        }
-        
-        [DebuggerHidden]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public async FTask SetUserToKen(object userToken)
-        {
-            this.InnerSetUserToken(userToken);
-            await this;
         }
         
         [DebuggerHidden]
@@ -158,14 +140,12 @@ namespace Fantasy
     }
 
     [AsyncMethodBuilder(typeof(AsyncFTaskMethodBuilder<>))]
-    public sealed partial class FTask<T> : ICriticalNotifyCompletion, IFTask
+    public sealed partial class FTask<T> : ICriticalNotifyCompletion
     {
         private T _value;
         private Action _callBack;
         private ExceptionDispatchInfo _exception;
         private STaskStatus _status = STaskStatus.Pending;
-        public FTaskType FTaskType { get; set; }
-        public object UserToKen { get; set; }
         public bool IsCompleted
         {
             [DebuggerHidden]
@@ -188,24 +168,7 @@ namespace Fantasy
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Coroutine()
         {
-            this.InnerSetUserToken(null);
             InnerCoroutine().Coroutine();
-        }
-        
-        [DebuggerHidden]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Coroutine(object userToken)
-        {
-            this.InnerSetUserToken(userToken);
-            InnerCoroutine().Coroutine();
-        }
-        
-        [DebuggerHidden]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public async FTask<T> SetUserToKen(object userToken)
-        {
-            this.InnerSetUserToken(userToken);
-            return await this;
         }
         
         [DebuggerHidden]

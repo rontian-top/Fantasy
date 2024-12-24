@@ -2,31 +2,38 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using Fantasy.Assembly;
+using Fantasy.Async;
+using Fantasy.DataStructure.Collection;
+using Fantasy.Entitas;
+using Fantasy.Entitas.Interface;
+using Fantasy.Helper;
+
 #pragma warning disable CS8604 // Possible null reference argument.
 #pragma warning disable CS8600 // Converting null literal or possible null value to non-nullable type.
 #pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
-namespace Fantasy
+namespace Fantasy.Entitas
 {
-    [StructLayout(LayoutKind.Sequential, Pack = 1)]
-    public struct UpdateQueueStruct
+    internal sealed class UpdateQueueInfo
     {
+        public bool IsStop;
         public readonly Type Type;
         public readonly long RunTimeId;
 
-        public UpdateQueueStruct(Type type, long runTimeId)
+        public UpdateQueueInfo(Type type, long runTimeId)
         {
             Type = type;
+            IsStop = false;
             RunTimeId = runTimeId;
         }
     }
     
-    [StructLayout(LayoutKind.Sequential, Pack = 1)]
-    public struct FrameUpdateQueueStruct
+    internal sealed class FrameUpdateQueueInfo
     {
         public readonly Type Type;
         public readonly long RunTimeId;
 
-        public FrameUpdateQueueStruct(Type type, long runTimeId)
+        public FrameUpdateQueueInfo(Type type, long runTimeId)
         {
             Type = type;
             RunTimeId = runTimeId;
@@ -40,17 +47,19 @@ namespace Fantasy
     {
         private readonly OneToManyList<long, Type> _assemblyList = new();
         private readonly OneToManyList<long, Type> _assemblyHashCodes = new();
+        
         private readonly Dictionary<Type, IAwakeSystem> _awakeSystems = new();
         private readonly Dictionary<Type, IUpdateSystem> _updateSystems = new();
         private readonly Dictionary<Type, IDestroySystem> _destroySystems = new();
-        private readonly Dictionary<Type, IEntitiesSystem> _deserializeSystems = new();
+        private readonly Dictionary<Type, IDeserializeSystem> _deserializeSystems = new();
         private readonly Dictionary<Type, IFrameUpdateSystem> _frameUpdateSystem = new();
         
         private readonly Dictionary<Type, long> _hashCodes = new Dictionary<Type, long>();
-        private readonly Queue<UpdateQueueStruct> _updateQueue = new Queue<UpdateQueueStruct>();
-        private readonly Queue<FrameUpdateQueueStruct> _frameUpdateQueue = new Queue<FrameUpdateQueueStruct>();
+        private readonly Queue<UpdateQueueInfo> _updateQueue = new Queue<UpdateQueueInfo>();
+        private readonly Queue<FrameUpdateQueueInfo> _frameUpdateQueue = new Queue<FrameUpdateQueueInfo>();
+        private readonly Dictionary<long, UpdateQueueInfo> _updateQueueDic = new Dictionary<long, UpdateQueueInfo>();
 
-        public async FTask<EntityComponent> Initialize()
+        internal async FTask<EntityComponent> Initialize()
         {
             await AssemblySystem.Register(this);
             return this;
@@ -97,7 +106,7 @@ namespace Fantasy
         {
             foreach (var entityType in AssemblySystem.ForEach(assemblyIdentity, typeof(IEntity)))
             {
-                _hashCodes.Add(entityType,HashCodeHelper.ComputeHash64(entityType.FullName));
+                _hashCodes.Add(entityType, HashCodeHelper.ComputeHash64(entityType.FullName));
                 _assemblyHashCodes.Add(assemblyIdentity, entityType);
             }
             
@@ -161,21 +170,19 @@ namespace Fantasy
                 _assemblyHashCodes.RemoveByKey(assemblyIdentity);
             }
 
-            if (!_assemblyList.TryGetValue(assemblyIdentity, out var assembly))
+            if (_assemblyList.TryGetValue(assemblyIdentity, out var assembly))
             {
-                return;
+                foreach (var type in assembly)
+                {
+                    _awakeSystems.Remove(type);
+                    _updateSystems.Remove(type);
+                    _destroySystems.Remove(type);
+                    _deserializeSystems.Remove(type);
+                    _frameUpdateSystem.Remove(type);
+                }
+                
+                _assemblyList.RemoveByKey(assemblyIdentity);
             }
-            
-            foreach (var type in assembly)
-            {
-                _awakeSystems.Remove(type);
-                _updateSystems.Remove(type);
-                _destroySystems.Remove(type);
-                _deserializeSystems.Remove(type);
-                _frameUpdateSystem.Remove(type);
-            }
-            
-            _assemblyList.RemoveByKey(assemblyIdentity);
         }
 
         #endregion
@@ -185,11 +192,10 @@ namespace Fantasy
         /// <summary>
         /// 触发实体的唤醒方法
         /// </summary>
-        /// <typeparam name="T">实体类型</typeparam>
         /// <param name="entity">实体对象</param>
-        public void Awake<T>(T entity) where T : Entity
+        public void Awake(Entity entity)
         {
-            if (!_awakeSystems.TryGetValue(typeof(T), out var awakeSystem))
+            if (!_awakeSystems.TryGetValue(entity.Type, out var awakeSystem))
             {
                 return;
             }
@@ -200,36 +206,7 @@ namespace Fantasy
             }
             catch (Exception e)
             {
-                Log.Error($"{typeof(T).FullName} Error {e}");
-            }
-        }
-
-        /// <summary>
-        /// 触发实体的唤醒方法
-        /// </summary>
-        /// <typeparam name="T">实体类型</typeparam>
-        /// <typeparam name="T1">参数类型</typeparam>
-        /// <param name="entity">实体对象</param>
-        /// <param name="ages">参数</param>
-        public void Awake<T, T1>(T entity, T1 ages) where T : Entity where T1 : struct
-        {
-            if (!_awakeSystems.TryGetValue(typeof(T), out var awakeSystem))
-            {
-                return;
-            }
-
-            try
-            {
-                if (awakeSystem is not AwakeSystem<T, T1> system)
-                {
-                    return;
-                }
-
-                system.Invoke(entity, ages);
-            }
-            catch (Exception e)
-            {
-                Log.Error($"{typeof(T).FullName} Awake Error {e}");
+                Log.Error($"{entity.Type.FullName} Error {e}");
             }
         }
         
@@ -239,7 +216,7 @@ namespace Fantasy
         /// <param name="entity">实体对象</param>
         public void Destroy(Entity entity)
         {
-            if (!_destroySystems.TryGetValue(entity.GetType(), out var system))
+            if (!_destroySystems.TryGetValue(entity.Type, out var system))
             {
                 return;
             }
@@ -250,29 +227,7 @@ namespace Fantasy
             }
             catch (Exception e)
             {
-                Log.Error($"{entity.GetType().FullName} Destroy Error {e}");
-            }
-        }
-
-        /// <summary>
-        /// 触发实体的销毁方法
-        /// </summary>
-        /// <typeparam name="T">实体类型</typeparam>
-        /// <param name="entity">实体对象</param>
-        public void Destroy<T>(T entity) where T : Entity
-        {
-            if (!_destroySystems.TryGetValue(typeof(T), out var system))
-            {
-                return;
-            }
-
-            try
-            {
-                system.Invoke(entity);
-            }
-            catch (Exception e)
-            {
-                Log.Error($"{typeof(T).FullName} Destroy Error {e}");
+                Log.Error($"{entity.Type.FullName} Destroy Error {e}");
             }
         }
         
@@ -282,7 +237,7 @@ namespace Fantasy
         /// <param name="entity">实体对象</param>
         public void Deserialize(Entity entity) 
         {
-            if (!_deserializeSystems.TryGetValue(entity.GetType(), out var system))
+            if (!_deserializeSystems.TryGetValue(entity.Type, out var system))
             {
                 return;
             }
@@ -293,29 +248,7 @@ namespace Fantasy
             }
             catch (Exception e)
             {
-                Log.Error($"{entity.GetType().FullName} Deserialize Error {e}");
-            }
-        }
-
-        /// <summary>
-        /// 触发实体的反序列化方法
-        /// </summary>
-        /// <typeparam name="T">实体类型</typeparam>
-        /// <param name="entity">实体对象</param>
-        public void Deserialize<T>(T entity) where T : Entity
-        {
-            if (!_deserializeSystems.TryGetValue(typeof(T), out var system))
-            {
-                return;
-            }
-
-            try
-            {
-                system.Invoke(entity);
-            }
-            catch (Exception e)
-            {
-                Log.Error($"{typeof(T).FullName} Deserialize Error {e}");
+                Log.Error($"{entity.Type.FullName} Deserialize Error {e}");
             }
         }
 
@@ -327,20 +260,36 @@ namespace Fantasy
         /// 将实体加入更新队列，准备进行更新
         /// </summary>
         /// <param name="entity">实体对象</param>
-        public void StartUpdate<T>(T entity) where T : Entity
+        public void StartUpdate(Entity entity)
         {
-            var type = typeof(T);
-            var entityRuntimeId = entity.RunTimeId;
+            var type = entity.Type;
+            var entityRuntimeId = entity.RuntimeId;
 
             if (_updateSystems.ContainsKey(type))
             {
-                _updateQueue.Enqueue(new UpdateQueueStruct(type, entityRuntimeId));
+                var updateQueueInfo = new UpdateQueueInfo(type, entityRuntimeId);
+                _updateQueue.Enqueue(updateQueueInfo);
+                _updateQueueDic.Add(entityRuntimeId, updateQueueInfo);
             }
 
             if (_frameUpdateSystem.ContainsKey(type))
             {
-                _frameUpdateQueue.Enqueue(new FrameUpdateQueueStruct(type, entityRuntimeId));
+                _frameUpdateQueue.Enqueue(new FrameUpdateQueueInfo(type, entityRuntimeId));
             }
+        }
+
+        /// <summary>
+        /// 停止实体进行更新
+        /// </summary>
+        /// <param name="entity">实体对象</param>
+        public void StopUpdate(Entity entity)
+        {
+            if (!_updateQueueDic.Remove(entity.RuntimeId, out var updateQueueInfo))
+            {
+                return;
+            }
+
+            updateQueueInfo.IsStop = true;
         }
 
         /// <summary>
@@ -353,6 +302,11 @@ namespace Fantasy
             while (updateQueueCount-- > 0)
             {
                 var updateQueueStruct = _updateQueue.Dequeue();
+
+                if (updateQueueStruct.IsStop)
+                {
+                    continue;
+                }
                 
                 if (!_updateSystems.TryGetValue(updateQueueStruct.Type, out var updateSystem))
                 {
@@ -363,6 +317,7 @@ namespace Fantasy
                 
                 if (entity == null || entity.IsDisposed)
                 {
+                    _updateQueueDic.Remove(updateQueueStruct.RunTimeId);
                     continue;
                 }
                 

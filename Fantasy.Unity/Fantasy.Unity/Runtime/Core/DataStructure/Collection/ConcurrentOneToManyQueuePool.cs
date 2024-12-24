@@ -2,9 +2,11 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using Fantasy.Pool;
+
 #pragma warning disable CS8603
 
-namespace Fantasy
+namespace Fantasy.DataStructure.Collection
 {
     /// <summary>
     /// 表示一个并发的一对多队列池，用于维护具有相同键的多个值的关联关系，实现了 <see cref="IDisposable"/> 接口。
@@ -13,10 +15,7 @@ namespace Fantasy
     /// <typeparam name="TValue">值的类型。</typeparam>
     public class ConcurrentOneToManyQueuePool<TKey, TValue> : ConcurrentOneToManyQueue<TKey, TValue>, IDisposable, IPool where TKey : notnull
     {
-        /// <summary>
-        /// 是否是池
-        /// </summary>
-        public bool IsPool { get; set; }
+        private bool _isPool;
         private bool _isDispose;
 
         /// <summary>
@@ -27,7 +26,7 @@ namespace Fantasy
         {
             var a = MultiThreadPool.Rent<ConcurrentOneToManyQueuePool<TKey, TValue>>();
             a._isDispose = false;
-            a.IsPool = true;
+            a._isPool = true;
             return a;
         }
 
@@ -45,6 +44,24 @@ namespace Fantasy
             Clear();
             // 将实例返回到对象池中，以便重用
             MultiThreadPool.Return(this);
+        }
+
+        /// <summary>
+        /// 获取一个值，该值指示当前实例是否为对象池中的实例。
+        /// </summary>
+        /// <returns></returns>
+        public bool IsPool()
+        {
+            return _isPool;
+        }
+
+        /// <summary>
+        /// 设置一个值，该值指示当前实例是否为对象池中的实例。
+        /// </summary>
+        /// <param name="isPool"></param>
+        public void SetIsPool(bool isPool)
+        {
+            _isPool = isPool;
         }
     }
 

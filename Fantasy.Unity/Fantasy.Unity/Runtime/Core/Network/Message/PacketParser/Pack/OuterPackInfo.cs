@@ -1,8 +1,16 @@
 // ReSharper disable ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
 using System;
 using System.IO;
+using Fantasy.Network;
+using Fantasy.Network.Interface;
+using Fantasy.PacketParser.Interface;
+using Fantasy.Serialize;
+
+#pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
+#pragma warning disable CS8603 // Possible null reference return.
+#pragma warning disable CS8600 // Converting null literal or possible null value to non-nullable type.
 #pragma warning disable CS8602 // Dereference of a possibly null reference.
-namespace Fantasy
+namespace Fantasy.PacketParser
 {
     public sealed class OuterPackInfo : APackInfo
     {
@@ -25,11 +33,11 @@ namespace Fantasy
             return outerPackInfo;
         }
 
-        public override MemoryStreamBuffer RentMemoryStream(int size = 0)
+        public override MemoryStreamBuffer RentMemoryStream(MemoryStreamBufferSource memoryStreamBufferSource, int size = 0)
         {
             if (MemoryStream == null)
             {
-                MemoryStream = Network.RentMemoryStream(size);
+                MemoryStream = Network.MemoryStreamBufferPool.RentMemoryStream(memoryStreamBufferSource, size);
             }
 
             return MemoryStream;
@@ -45,12 +53,21 @@ namespace Fantasy
             if (MemoryStream == null)
             {
                 Log.Debug("Deserialize MemoryStream is null");
+                return null;
             }
 
             MemoryStream.Seek(Packet.OuterPacketHeadLength, SeekOrigin.Begin);
-            var @object = MessagePackHelper.Deserialize(messageType, MemoryStream);
+            
+            if (SerializerManager.TryGetSerializer(OpCodeIdStruct.OpCodeProtocolType, out var serializer))
+            {
+                var obj = serializer.Deserialize(messageType, MemoryStream);
+                MemoryStream.Seek(0, SeekOrigin.Begin);
+                return obj;
+            }
+            
             MemoryStream.Seek(0, SeekOrigin.Begin);
-            return @object;
+            Log.Error($"protocolCode:{ProtocolCode} Does not support processing protocol");
+            return null;
         }
     }
 }

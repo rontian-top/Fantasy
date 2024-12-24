@@ -2,12 +2,12 @@ using System;
 using Newtonsoft.Json;
 #pragma warning disable CS8603
 
-namespace Fantasy
+namespace Fantasy.Helper
 {
     /// <summary>
     /// 提供操作 JSON 数据的辅助方法。
     /// </summary>
-    public static class JsonHelper
+    public static partial class JsonHelper
     {
         /// <summary>
         /// 将对象序列化为 JSON 字符串。

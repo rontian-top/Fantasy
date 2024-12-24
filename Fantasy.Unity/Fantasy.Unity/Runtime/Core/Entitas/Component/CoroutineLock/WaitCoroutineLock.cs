@@ -1,9 +1,12 @@
 using System;
+using Fantasy.Event;
+using Fantasy.Pool;
+
 #pragma warning disable CS8625 // Cannot convert null literal to non-nullable reference type.
 #pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
-namespace Fantasy
+namespace Fantasy.Async
 {
-    public sealed class WaitCoroutineLockPool : PoolCore<WaitCoroutineLock>
+    internal sealed class WaitCoroutineLockPool : PoolCore<WaitCoroutineLock>
     {
         private readonly Scene _scene;
         private readonly CoroutineLockComponent _coroutineLockComponent;
@@ -44,7 +47,7 @@ namespace Fantasy
 
     internal sealed class OnCoroutineLockTimeout : EventSystem<CoroutineLockTimeout>
     {
-        public override void Handler(CoroutineLockTimeout self)
+        protected override void Handler(CoroutineLockTimeout self)
         {
             var selfWaitCoroutineLock = self.WaitCoroutineLock;
             
@@ -57,9 +60,12 @@ namespace Fantasy
         }
     }
 
+    /// <summary>
+    /// 一个协程锁的实例，用户可以用过这个手动释放锁
+    /// </summary>
     public sealed class WaitCoroutineLock : IPool, IDisposable
     {
-        public bool IsPool { get; set; }
+        private bool _isPool;
         internal string Tag { get; private set; }
         internal long LockId { get; private set; }
         internal long TimerId { get; private set; }
@@ -78,7 +84,9 @@ namespace Fantasy
             CoroutineLockQueueKey = coroutineLockQueueKey;
             _waitCoroutineLockPool = waitCoroutineLockPool;
         }
-
+        /// <summary>
+        /// 释放协程锁
+        /// </summary>
         public void Dispose()
         {
             if (LockId == 0)
@@ -115,6 +123,24 @@ namespace Fantasy
             
             _isSetResult = true;
             Tcs.SetResult(this);
+        }
+
+        /// <summary>
+        /// 获取一个值，该值指示当前实例是否为对象池中的实例。
+        /// </summary>
+        /// <returns></returns>
+        public bool IsPool()
+        {
+            return _isPool;
+        }
+
+        /// <summary>
+        /// 设置一个值，该值指示当前实例是否为对象池中的实例。
+        /// </summary>
+        /// <param name="isPool"></param>
+        public void SetIsPool(bool isPool)
+        {
+            _isPool = isPool;
         }
     }
 }

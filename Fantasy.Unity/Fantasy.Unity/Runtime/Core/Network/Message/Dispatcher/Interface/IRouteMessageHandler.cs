@@ -1,7 +1,13 @@
+using Fantasy.Async;
+using Fantasy.Entitas;
+using Fantasy.InnerMessage;
+using Fantasy.Network;
+using Fantasy.Serialize;
+
 #if FANTASY_NET
 // ReSharper disable InconsistentNaming
 
-namespace Fantasy
+namespace Fantasy.Network.Interface
 {
     /// <summary>
     /// 表示路由消息处理器的接口，处理特定类型的路由消息。
@@ -142,7 +148,7 @@ namespace Fantasy
                 {
                     return;
                 }
-                
+
                 session.Send(response, rpcId);
             }
             
@@ -295,7 +301,7 @@ namespace Fantasy
                 {
                     return;
                 }
-                
+
                 session.Send(response, rpcId);
             }
             

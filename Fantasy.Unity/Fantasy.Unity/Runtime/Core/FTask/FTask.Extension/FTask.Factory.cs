@@ -1,13 +1,17 @@
 #if !FANTASY_WEBGL
 using System.Collections.Concurrent;
 #endif
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 #pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
 #pragma warning disable CS8625 // Cannot convert null literal to non-nullable reference type.
 
-namespace Fantasy
+namespace Fantasy.Async
 {
+    /// <summary>
+    /// 一个异步任务
+    /// </summary>
     public partial class FTask
     {
         private bool _isPool;
@@ -16,8 +20,18 @@ namespace Fantasy
 #else
         private static readonly ConcurrentQueue<FTask> Caches = new ConcurrentQueue<FTask>();
 #endif
+        /// <summary>
+        /// 创建一个空的任务
+        /// </summary>
         public static FTaskCompleted CompletedTask => new FTaskCompleted();
+        
+        private FTask() { }
 
+        /// <summary>
+        /// 创建一个任务
+        /// </summary>
+        /// <param name="isPool">是否从对象池中创建</param>
+        /// <returns></returns>
         [DebuggerHidden]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static FTask Create(bool isPool = true)
@@ -36,11 +50,6 @@ namespace Fantasy
             return fTask;
         }
 
-        private FTask()
-        {
-            FTaskType = FTaskType.Task;
-        }
-
         private void Return()
         {
             if (!_isPool || Caches.Count > 2000)
@@ -49,13 +58,15 @@ namespace Fantasy
             }
 
             _callBack = null;
-            UserToKen = null;
-            FTaskType = FTaskType.Task;
             _status = STaskStatus.Pending;
             Caches.Enqueue(this);
         }
     }
 
+    /// <summary>
+    /// 一个异步任务
+    /// </summary>
+    /// <typeparam name="T">任务的泛型类型</typeparam>
     public partial class FTask<T>
     {
         private bool _isPool;
@@ -64,6 +75,11 @@ namespace Fantasy
 #else
         private static readonly ConcurrentQueue<FTask<T>> Caches = new ConcurrentQueue<FTask<T>>();
 #endif
+        /// <summary>
+        /// 创建一个任务
+        /// </summary>
+        /// <param name="isPool">是否从对象池中创建</param>
+        /// <returns></returns>
         [DebuggerHidden]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static FTask<T> Create(bool isPool = true)
@@ -82,10 +98,7 @@ namespace Fantasy
             return fTask;
         }
         
-        private FTask()
-        {
-            FTaskType = FTaskType.Task;
-        }
+        private FTask() { }
 
         private void Return()
         {
@@ -95,8 +108,6 @@ namespace Fantasy
             }
             
             _callBack = null;
-            UserToKen = null;
-            FTaskType = FTaskType.Task;
             _status = STaskStatus.Pending;
             Caches.Enqueue(this);
         }

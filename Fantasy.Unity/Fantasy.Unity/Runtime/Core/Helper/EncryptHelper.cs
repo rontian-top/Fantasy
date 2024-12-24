@@ -2,12 +2,12 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace Fantasy
+namespace Fantasy.Helper
 {
     /// <summary>
     /// 提供计算 MD5 散列值的辅助方法。
     /// </summary>
-    public static class EncryptHelper
+    public static partial class EncryptHelper
     {
         private static readonly SHA256 Sha256Hash = SHA256.Create();
         

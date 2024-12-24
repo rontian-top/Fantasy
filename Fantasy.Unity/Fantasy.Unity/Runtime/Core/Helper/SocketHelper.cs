@@ -1,9 +1,13 @@
 #if !FANTASY_WEBGL
 using System.Net;
 using System.Net.Sockets;
-namespace Fantasy
+#pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
+namespace Fantasy.Helper
 {
-    public static class SocketHelper
+    /// <summary>
+    /// Socket帮助类
+    /// </summary>
+    public static partial class SocketHelper
     {
     // always pass the same IPEndPointNonAlloc instead of allocating a new
         // one each time.

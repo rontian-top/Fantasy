@@ -1,11 +1,16 @@
 using System;
 using System.Reflection;
+using Fantasy.Assembly;
+using Fantasy.Async;
+using Fantasy.DataStructure.Collection;
+using Fantasy.Entitas;
+
 // ReSharper disable PossibleMultipleEnumeration
 #pragma warning disable CS8600 // Converting null literal or possible null value to non-nullable type.
 #pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
 // ReSharper disable MethodOverloadWithOptionalParameter
 
-namespace Fantasy
+namespace Fantasy.Event
 {
     internal sealed class EventCache
     {
@@ -25,7 +30,7 @@ namespace Fantasy
         private readonly OneToManyList<long, EventCache> _assemblyEvents = new();
         private readonly OneToManyList<long, EventCache> _assemblyAsyncEvents = new();
 
-        public async FTask<EventComponent> Initialize()
+        internal async FTask<EventComponent> Initialize()
         {
             await AssemblySystem.Register(this);
             return this;

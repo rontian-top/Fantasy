@@ -26,7 +26,7 @@ namespace Fantasy
         }
     }
     
-    public sealed class MultiThreadScheduler : ISceneScheduler
+    internal sealed class MultiThreadScheduler : ISceneScheduler
     {
         private bool _isDisposed;
         private readonly ConcurrentDictionary<long, MultiThreadStruct> _threads = new ConcurrentDictionary<long, MultiThreadStruct>();
@@ -52,14 +52,14 @@ namespace Fantasy
         public void Add(Scene scene)
         {
             var cts = new CancellationTokenSource();
-            var thread = new Thread(() => Loop(scene,cts.Token));
-            _threads.TryAdd(scene.RunTimeId, new MultiThreadStruct(thread, cts));
+            var thread = new Thread(() => Loop(scene, cts.Token));
+            _threads.TryAdd(scene.RuntimeId, new MultiThreadStruct(thread, cts));
             thread.Start();
         }
 
         public void Remove(Scene scene)
         {
-            if (_threads.TryRemove(scene.RunTimeId, out var multiThreadStruct))
+            if (_threads.TryRemove(scene.RuntimeId, out var multiThreadStruct))
             {
                 multiThreadStruct.Dispose();
             }

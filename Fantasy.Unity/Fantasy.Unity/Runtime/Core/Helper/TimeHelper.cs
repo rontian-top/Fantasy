@@ -3,12 +3,12 @@ using System;
 using UnityEngine;
 #endif
 
-namespace Fantasy
+namespace Fantasy.Helper
 {
     /// <summary>
     /// 提供与时间相关的帮助方法。
     /// </summary>
-    public static class TimeHelper
+    public static partial class TimeHelper
     {
         /// <summary>
         /// 一小时的毫秒值。
@@ -29,7 +29,7 @@ namespace Fantasy
         /// 获取当前时间的毫秒数，从1970年1月1日开始计算。
         /// </summary>
         public static long Now => (DateTime.UtcNow.Ticks - Epoch) / 10000;
-#if FANTASY_UNITY
+#if FANTASY_UNITY || FANTASY_CONSOLE
         /// <summary>
         /// 与服务器时间的偏差。
         /// </summary>
@@ -38,17 +38,19 @@ namespace Fantasy
         /// 获取当前服务器时间的毫秒数，加上与服务器时间的偏差。
         /// </summary>
         public static long ServerNow => Now + TimeDiff;
+#if FANTASY_UNITY
         /// <summary>
         /// 获取当前Unity运行的总时间的毫秒数。
         /// </summary>
         public static long UnityNow => (long) (Time.time * 1000);
+#endif
 #endif
         /// <summary>
         /// 将日期时间转换为毫秒数，从1970年1月1日开始计算。
         /// </summary>
         /// <param name="d">要转换的日期时间。</param>
         /// <returns>转换后的毫秒数。</returns>
-        public static long Transition(DateTime d)
+        public static long Transition(this DateTime d)
         {
             return (d.Ticks - Epoch) / 10000;
         }
@@ -58,7 +60,7 @@ namespace Fantasy
         /// </summary>
         /// <param name="timeStamp">要转换的毫秒数。</param>
         /// <returns>转换后的日期时间。</returns>
-        public static DateTime Transition(long timeStamp)
+        public static DateTime Transition(this long timeStamp)
         {
             return Dt1970.AddTicks(timeStamp);
         }
@@ -68,7 +70,7 @@ namespace Fantasy
         /// </summary>
         /// <param name="timeStamp">要转换的毫秒数。</param>
         /// <returns>转换后的本地时间的日期时间。</returns>
-        public static DateTime TransitionLocal(long timeStamp)
+        public static DateTime TransitionLocal(this long timeStamp)
         {
             return Dt1970.AddTicks(timeStamp).ToLocalTime();
         }

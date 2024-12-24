@@ -1,7 +1,8 @@
 using System;
 using System.Collections.Generic;
+using Fantasy.Pool;
 
-namespace Fantasy
+namespace Fantasy.DataStructure.Dictionary
 {
     /// <summary>
     /// 提供一个可以使用对象池管理的字典类。
@@ -10,10 +11,7 @@ namespace Fantasy
     /// <typeparam name="TN">字典中值的类型。</typeparam>
     public sealed class DictionaryPool<TM, TN> : Dictionary<TM, TN>, IDisposable, IPool where TM : notnull
     {
-        /// <summary>
-        /// 是否是池
-        /// </summary>
-        public bool IsPool { get; set; }
+        private bool _isPool;
         private bool _isDispose;
 
         /// <summary>
@@ -47,8 +45,26 @@ namespace Fantasy
             var dictionary = MultiThreadPool.Rent<DictionaryPool<TM, TN>>();
 #endif
             dictionary._isDispose = false;
-            dictionary.IsPool = true;
+            dictionary._isPool = true;
             return dictionary;
+        }
+
+        /// <summary>
+        /// 获取一个值，该值指示当前实例是否为对象池中的实例。
+        /// </summary>
+        /// <returns></returns>
+        public bool IsPool()
+        {
+            return _isPool;
+        }
+
+        /// <summary>
+        /// 设置一个值，该值指示当前实例是否为对象池中的实例。
+        /// </summary>
+        /// <param name="isPool"></param>
+        public void SetIsPool(bool isPool)
+        {
+            _isPool = isPool;
         }
     }
 }

@@ -1,10 +1,22 @@
 using System;
 using System.Net;
+using Fantasy.Entitas;
+using Fantasy.Helper;
+using Fantasy.Network.Interface;
+#if !FANTASY_WEBGL
+using Fantasy.Network.TCP;
+using Fantasy.Network.KCP;
+#endif
+#if FANTASY_NET
+using Fantasy.Network.HTTP;
+#endif
+using Fantasy.Network.WebSocket;
+
 #pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
 
-namespace Fantasy
+namespace Fantasy.Network
 {
-    public static class NetworkProtocolFactory
+    internal static class NetworkProtocolFactory
     {
 #if FANTASY_NET
         public static ANetwork CreateServer(Scene scene, NetworkProtocolType protocolType, NetworkTarget networkTarget, string bindIp, int port, bool isHttps = false)
@@ -28,6 +40,13 @@ namespace Fantasy
                 case NetworkProtocolType.WebSocket:
                 {
                     var network = Entity.Create<WebSocketServerNetwork>(scene, false, true);
+                    var urls = isHttps ? new [] { $"https://{bindIp}:{port}/" } : new [] { $"http://{bindIp}:{port}/" };
+                    network.Initialize(networkTarget, urls);
+                    return network;
+                }
+                case NetworkProtocolType.HTTP:
+                {
+                    var network = Entity.Create<HTTPServerNetwork>(scene, false, true);
                     var urls = isHttps ? new [] { $"https://{bindIp}:{port}/" } : new [] { $"http://{bindIp}:{port}/" };
                     network.Initialize(networkTarget, urls);
                     return network;

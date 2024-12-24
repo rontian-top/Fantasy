@@ -2,9 +2,12 @@ using System.Security.Cryptography;
 using System.Text;
 // ReSharper disable InconsistentNaming
 
-namespace Fantasy
+namespace Fantasy.Helper
 {
-    public static class HashCodeHelper
+    /// <summary>
+    /// HashCode算法帮助类
+    /// </summary>
+    public static partial class HashCodeHelper
     {
         private static readonly SHA256 Sha256Hash = SHA256.Create();
         

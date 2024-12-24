@@ -1,9 +1,14 @@
 #if FANTASY_NET
 using System.Reflection;
 using CommandLine;
-using NLog;
+using Fantasy.Assembly;
+using Fantasy.Async;
+using Fantasy.Helper;
+using Fantasy.Network;
+using Fantasy.Serialize;
+// ReSharper disable FunctionNeverReturns
 
-namespace Fantasy;
+namespace Fantasy.Platform.Net;
 
 /// <summary>
 /// Fantasy.Net 应用程序入口
@@ -13,10 +18,10 @@ namespace Fantasy;
 public static class Entry
 {
     /// <summary>
-    /// 启动Fantasy.Net
+    /// 框架初始化
     /// </summary>
     /// <param name="assemblies"></param>
-    public static async FTask Start(params Assembly[] assemblies)
+    public static void Initialize(params System.Reflection.Assembly[] assemblies)
     {
         // 解析命令行参数
         Parser.Default.ParseArguments<CommandLineOptions>(Environment.GetCommandLineArgs())
@@ -26,28 +31,8 @@ public static class Entry
                 ProcessDefine.Options = option;
                 ProcessDefine.InnerNetwork = Enum.Parse<NetworkProtocolType>(option.InnerNetwork);
             });
-        // 非Benchmark模式、根据不同的运行模式来选择日志的方式
-        switch (ProcessDefine.Options.Mode)
-        {
-            case "Develop":
-            {
-                LogManager.Configuration.RemoveRuleByName("ServerDebug");
-                LogManager.Configuration.RemoveRuleByName("ServerTrace");
-                LogManager.Configuration.RemoveRuleByName("ServerInfo");
-                LogManager.Configuration.RemoveRuleByName("ServerWarn");
-                LogManager.Configuration.RemoveRuleByName("ServerError");
-                break;
-            }
-            case "Release":
-            {
-                LogManager.Configuration.RemoveRuleByName("ConsoleTrace");
-                LogManager.Configuration.RemoveRuleByName("ConsoleDebug");
-                LogManager.Configuration.RemoveRuleByName("ConsoleInfo");
-                LogManager.Configuration.RemoveRuleByName("ConsoleWarn");
-                LogManager.Configuration.RemoveRuleByName("ConsoleError");
-                break;
-            }
-        }
+        // 初始化Log系统
+        Log.Initialize();
         // 检查启动参数,后期可能有机器人等不同的启动参数
         switch (ProcessDefine.Options.ProcessType)
         {
@@ -60,12 +45,20 @@ public static class Entry
                 throw new NotSupportedException($"ProcessType is {ProcessDefine.Options.ProcessType} Unrecognized!");
             }
         }
+        
         // 初始化程序集管理系统
         AssemblySystem.Initialize(assemblies);
-        // Mongo初始化
-        BsonPackHelper.Initialize();
+        // 初始化序列化
+        SerializerManager.Initialize();
         // 精度处理（只针对Windows下有作用、其他系统没有这个问题、一般也不会用Windows来做服务器的）
         WinPeriod.Initialize();
+    }
+
+    /// <summary>
+    /// 启动Fantasy.Net
+    /// </summary>
+    public static async FTask Start()
+    {
         // 启动Process
         StartProcess().Coroutine();
         await FTask.CompletedTask;
@@ -74,6 +67,16 @@ public static class Entry
             ThreadScheduler.Update();
             Thread.Sleep(1);
         }
+    }
+
+    /// <summary>
+    /// 初始化并且启动框架
+    /// </summary>
+    /// <param name="assemblies"></param>
+    public static async FTask Start(params System.Reflection.Assembly[] assemblies)
+    {
+        Initialize(assemblies);
+        await Start();
     }
 
     private static async FTask StartProcess()
@@ -113,6 +116,7 @@ public static class Entry
     public static void Close()
     {
         AssemblySystem.Dispose();
+        SerializerManager.Dispose();
     }
 }
 #endif

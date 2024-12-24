@@ -1,3 +1,8 @@
+using System;
+using Fantasy.Async;
+using Fantasy.Network;
+using Fantasy.Network.Interface;
+
 namespace Fantasy.Gate;
 
 public sealed class C2G_TestRequestHandler : MessageRPC<C2G_TestRequest, G2C_TestResponse>

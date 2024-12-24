@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using Fantasy.Pool;
+
 #pragma warning disable CS8600 // Converting null literal or possible null value to non-nullable type.
 
-namespace Fantasy
+namespace Fantasy.DataStructure.Collection
 {
     /// <summary>
     /// 一对多哈希集合（OneToManyHashSet）对象池。
@@ -11,10 +13,7 @@ namespace Fantasy
     /// <typeparam name="TValue">值的类型。</typeparam>
     public class OneToManyHashSetPool<TKey, TValue> : OneToManyHashSet<TKey, TValue>, IDisposable, IPool where TKey : notnull
     {
-        /// <summary>
-        /// 是否是池
-        /// </summary>
-        public bool IsPool { get; set; }
+        private bool _isPool;
         private bool _isDispose;
 
         /// <summary>
@@ -29,7 +28,7 @@ namespace Fantasy
             var a = MultiThreadPool.Rent<OneToManyHashSetPool<TKey, TValue>>();
 #endif
             a._isDispose = false;
-            a.IsPool = true;
+            a._isPool = true;
             return a;
         }
 
@@ -50,6 +49,24 @@ namespace Fantasy
 #else
             MultiThreadPool.Return(this);
 #endif
+        }
+
+        /// <summary>
+        /// 获取一个值，该值指示当前实例是否为对象池中的实例。
+        /// </summary>
+        /// <returns></returns>
+        public bool IsPool()
+        {
+            return _isPool;
+        }
+
+        /// <summary>
+        /// 设置一个值，该值指示当前实例是否为对象池中的实例。
+        /// </summary>
+        /// <param name="isPool"></param>
+        public void SetIsPool(bool isPool)
+        {
+            _isPool = isPool;
         }
     }
 

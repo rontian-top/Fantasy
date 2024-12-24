@@ -4,9 +4,10 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 // ReSharper disable MemberCanBePrivate.Global
+#pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
 #pragma warning disable CS8604 // Possible null reference argument.
 
-namespace Fantasy
+namespace Fantasy.Async
 {
     [StructLayout(LayoutKind.Auto)]
     public readonly struct AsyncFTaskMethodBuilder
@@ -64,21 +65,7 @@ namespace Fantasy
         public void AwaitUnsafeOnCompleted<TAwaiter, TStateMachine>(ref TAwaiter awaiter, ref TStateMachine stateMachine) where TAwaiter : ICriticalNotifyCompletion where TStateMachine : IAsyncStateMachine
         {
             // 通常在你不需要恢复到原始同步上下文时调用，这意味着你不关心在什么线程上恢复执行。
-            
             awaiter.UnsafeOnCompleted(stateMachine.MoveNext);
-            
-            if (awaiter is not IFTask fTask)
-            {
-                return;
-            }
-            
-            if (Task.FTaskType == FTaskType.ContagionUserToKen)
-            {
-                fTask.InnerSetUserToken(Task.UserToKen);
-                return;
-            }
-            
-            Task.UserToKen = fTask;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -145,19 +132,6 @@ namespace Fantasy
         public void AwaitUnsafeOnCompleted<TAwaiter, TStateMachine>(ref TAwaiter awaiter, ref TStateMachine stateMachine) where TAwaiter : ICriticalNotifyCompletion where TStateMachine : IAsyncStateMachine
         {
             awaiter.UnsafeOnCompleted(stateMachine.MoveNext);
-            
-            if (awaiter is not IFTask fTask)
-            {
-                return;
-            }
-
-            if (Task.FTaskType == FTaskType.ContagionUserToKen)
-            {
-                fTask.InnerSetUserToken(Task.UserToKen);
-                return;
-            }
-
-            Task.UserToKen = fTask;
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

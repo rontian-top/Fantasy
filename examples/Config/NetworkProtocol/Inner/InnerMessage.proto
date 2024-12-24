@@ -1,5 +1,9 @@
 syntax = "proto3";
 package Sining.Message;
+message G2A_TestMessage // IRouteMessage
+{
+	string Tag = 1;
+}
 message G2A_TestRequest // IRouteRequest,G2A_TestResponse
 {
 
@@ -24,4 +28,42 @@ message G2Chat_CreateRouteRequest // IRouteRequest,Chat2G_CreateRouteResponse
 message Chat2G_CreateRouteResponse // IRouteResponse
 {
 	int64 ChatRouteId = 1;
+}
+/// Map给另外一个Map发送Unit数据
+// Protocol Bson
+message M2M_SendUnitRequest // IRouteRequest,M2M_SendUnitResponse
+{
+	Unit Unit = 1;
+}
+message M2M_SendUnitResponse // IRouteResponse
+{
+
+}
+/// Gate发送Addressable消息给MAP
+message G2M_SendAddressableMessage // IAddressableRouteMessage
+{
+	string Tag = 1;
+}
+// Gate通知Map创建一个SubScene
+message G2M_CreateSubSceneRequest // IRouteRequest,M2G_CreateSubSceneResponse
+{
+
+}
+message M2G_CreateSubSceneResponse // IRouteResponse
+{
+	int64 SubSceneRouteId = 1;
+}
+// Gate给SubScene发送一个消息
+message G2SubScene_SentMessage // IRouteMessage
+{
+	string Tag = 1;
+}
+/// Gate通知SubScene创建一个Addressable消息
+message G2SubScene_AddressableIdRequest // IRouteRequest,SubScene2G_AddressableIdResponse
+{
+
+}
+message SubScene2G_AddressableIdResponse // IRouteResponse
+{
+	int64 AddressableId = 1;	// SubScene服务器返回的AddressableId
 }

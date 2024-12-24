@@ -1,9 +1,12 @@
 using System;
 using System.Runtime.CompilerServices;
 
-namespace Fantasy
+namespace Fantasy.Helper
 {
-    public static class WebSocketHelper
+    /// <summary>
+    /// WebSocket帮助类
+    /// </summary>
+    public static partial class WebSocketHelper
     {
         /// <summary>
         /// 根据字符串获取WebSocket的连接地址

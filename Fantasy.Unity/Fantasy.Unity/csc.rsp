@@ -1,2 +1,2 @@
 -define:FANTASY_UNITY
--define:FANTASY_KCPUNSAFE
+-r:System.Threading.Tasks.Extensions.dll

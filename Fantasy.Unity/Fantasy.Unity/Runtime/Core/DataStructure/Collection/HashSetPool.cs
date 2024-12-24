@@ -1,7 +1,8 @@
 using System;
 using System.Collections.Generic;
+using Fantasy.Pool;
 
-namespace Fantasy
+namespace Fantasy.DataStructure.Collection
 {
     /// <summary>
     /// 可释放的哈希集合对象池。
@@ -9,10 +10,7 @@ namespace Fantasy
     /// <typeparam name="T">哈希集合中元素的类型。</typeparam>
     public sealed class HashSetPool<T> : HashSet<T>, IDisposable, IPool
     {
-        /// <summary>
-        /// 是否是池
-        /// </summary>
-        public bool IsPool { get; set; }
+        private bool _isPool;
         private bool _isDispose;
 
         /// <summary>
@@ -43,14 +41,32 @@ namespace Fantasy
 #if FANTASY_WEBGL
             var list = Pool<HashSetPool<T>>.Rent();
             list._isDispose = false;
-            list.IsPool = true;
+            list._isPool = true;
             return list;
 #else
             var list = MultiThreadPool.Rent<HashSetPool<T>>();
             list._isDispose = false;
-            list.IsPool = true;
+            list._isPool = true;
             return list;
 #endif
+        }
+
+        /// <summary>
+        /// 获取一个值，该值指示当前实例是否为对象池中的实例。
+        /// </summary>
+        /// <returns></returns>
+        public bool IsPool()
+        {
+            return _isPool;
+        }
+
+        /// <summary>
+        /// 设置一个值，该值指示当前实例是否为对象池中的实例。
+        /// </summary>
+        /// <param name="isPool"></param>
+        public void SetIsPool(bool isPool)
+        {
+            _isPool = isPool;
         }
     }
 
@@ -60,10 +76,7 @@ namespace Fantasy
     /// <typeparam name="T">哈希集合中元素的类型。</typeparam>
     public sealed class HashSetBasePool<T> : IDisposable, IPool
     {
-        /// <summary>
-        /// 是否是池
-        /// </summary>
-        public bool IsPool { get; set; }
+        private bool _isPool;
         
         /// <summary>
         /// 存储实际的哈希集合
@@ -78,11 +91,11 @@ namespace Fantasy
         {
 #if FANTASY_WEBGL
             var hashSetBasePool = Pool<HashSetBasePool<T>>.Rent();
-            hashSetBasePool.IsPool = true;
+            hashSetBasePool._isPool = true;
             return hashSetBasePool;
 #else
             var hashSetBasePool = MultiThreadPool.Rent<HashSetBasePool<T>>();
-            hashSetBasePool.IsPool = true;
+            hashSetBasePool._isPool = true;
             return hashSetBasePool;
 #endif
         }
@@ -98,6 +111,24 @@ namespace Fantasy
 #else
             MultiThreadPool.Return(this);
 #endif
+        }
+
+        /// <summary>
+        /// 获取一个值，该值指示当前实例是否为对象池中的实例。
+        /// </summary>
+        /// <returns></returns>
+        public bool IsPool()
+        {
+            return _isPool;
+        }
+
+        /// <summary>
+        /// 设置一个值，该值指示当前实例是否为对象池中的实例。
+        /// </summary>
+        /// <param name="isPool"></param>
+        public void SetIsPool(bool isPool)
+        {
+            throw new NotImplementedException();
         }
     }
 }

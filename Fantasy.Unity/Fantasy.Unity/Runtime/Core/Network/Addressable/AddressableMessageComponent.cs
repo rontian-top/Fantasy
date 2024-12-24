@@ -1,6 +1,10 @@
+using Fantasy.Async;
+using Fantasy.Entitas;
+using Fantasy.Entitas.Interface;
+
 #pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
 #if FANTASY_NET
-namespace Fantasy
+namespace Fantasy.Network.Route
 {
     public class AddressableMessageComponentDestroySystem : DestroySystem<AddressableMessageComponent>
     {
@@ -45,7 +49,7 @@ namespace Fantasy
 #if FANTASY_DEVELOP
             Log.Debug($"AddressableMessageComponent Register addressableId:{AddressableId} RouteId:{Parent.RuntimeId}");
 #endif
-            return AddressableHelper.AddAddressable(Scene, AddressableId, Parent.RunTimeId, isLock);
+            return AddressableHelper.AddAddressable(Scene, AddressableId, Parent.RuntimeId, isLock);
         }
 
         /// <summary>
@@ -68,7 +72,19 @@ namespace Fantasy
 #if FANTASY_DEVELOP
             Log.Debug($"AddressableMessageComponent UnLock {Parent.Id} {Parent.RuntimeId}");
 #endif
-            return AddressableHelper.UnLockAddressable(Scene, Parent.Id, Parent.RunTimeId, source);
+            return AddressableHelper.UnLockAddressable(Scene, Parent.Id, Parent.RuntimeId, source);
+        }
+
+        /// <summary>
+        /// 锁定可寻址消息并且释放掉AddressableMessageComponent组件。
+        /// 该方法不会自动取Addressable中心删除自己的信息。
+        /// 用于传送或转移到其他服务器时使用
+        /// </summary>
+        public async FTask LockAndRelease()
+        {
+            await Lock();
+            AddressableId = 0;
+            Dispose();
         }
     }
 }

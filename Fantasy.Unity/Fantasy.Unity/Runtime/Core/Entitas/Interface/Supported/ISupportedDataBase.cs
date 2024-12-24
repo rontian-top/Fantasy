@@ -1,5 +1,5 @@
-#if FANTASY_NET
-namespace Fantasy
+#pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
+namespace Fantasy.Entitas.Interface
 {
     /// <summary>
     /// Entity支持数据库
@@ -17,4 +17,3 @@ namespace Fantasy
         }
     }
 }
-#endif

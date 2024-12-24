@@ -13,5 +13,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   autoCopyAssembly: 0
-  hotUpdatePath: 
+  hotUpdatePath: Assets/AssetBundle/Hotfix
   hotUpdateAssemblyDefinitions: []
+  linkAssemblyDefinitions: []

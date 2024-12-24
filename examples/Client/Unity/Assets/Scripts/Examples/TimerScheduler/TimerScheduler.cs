@@ -1,6 +1,9 @@
 using System.Collections;
 using System.Collections.Generic;
 using Fantasy;
+using Fantasy.Async;
+using Fantasy.Event;
+using Fantasy.Helper;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -11,7 +14,7 @@ public struct OnceTimerEvent
 
 public sealed class OnOnceTimerEvent : EventSystem<OnceTimerEvent>
 {
-    public override void Handler(OnceTimerEvent self)
+    protected override void Handler(OnceTimerEvent self)
     {
         Log.Debug("使用OnceTimer在2秒后执行了一个Event");
     }
@@ -58,7 +61,11 @@ public class TimerScheduler : MonoBehaviour
 
     private async FTask StartAsync()
     {
-        _scene = await Fantasy.Entry.Initialize(GetType().Assembly);
+        // 初始化框架
+        Fantasy.Platform.Unity.Entry.Initialize(GetType().Assembly);
+        // 创建一个Scene，这个Scene代表一个客户端的场景，客户端的所有逻辑都可以写这里
+        // 如果有自己的框架，也可以就单纯拿这个Scene做网络通讯也没问题。
+        _scene = await Scene.Create(SceneRuntimeType.MainThread);
         Button1.interactable = false;
         Button2.interactable = true;
         Button3.interactable = true;

@@ -6,18 +6,22 @@ using System.Collections.Concurrent;
 
 namespace Fantasy;
 
+/// <summary>
+/// 线程的同步上下文
+/// </summary>
 public sealed class ThreadSynchronizationContext : SynchronizationContext
 {
-    private Action _actionHandler;
     private readonly ConcurrentQueue<Action> _queue = new();
-        
+    /// <summary>
+    /// 执行当前上下文投递过的逻辑
+    /// </summary>
     public void Update()
     {
-        while (_queue.TryDequeue(out _actionHandler))
+        while (_queue.TryDequeue(out var actionHandler))
         {
             try
             {
-                _actionHandler();
+                actionHandler();
             }
             catch (Exception e)
             {
@@ -26,11 +30,20 @@ public sealed class ThreadSynchronizationContext : SynchronizationContext
         }
     }
         
+    /// <summary>
+    /// 投递一个逻辑到当前上下文
+    /// </summary>
+    /// <param name="callback"></param>
+    /// <param name="state"></param>
     public override void Post(SendOrPostCallback callback, object state)
     {
         Post(() => callback(state));
     }
         
+    /// <summary>
+    /// 投递一个逻辑到当前上下文
+    /// </summary>
+    /// <param name="action"></param>
     public void Post(Action action)
     {
         _queue.Enqueue(action);

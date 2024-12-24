@@ -1,10 +1,18 @@
 using System;
 using System.Collections.Generic;
+using Fantasy.Async;
+using Fantasy.DataStructure.Collection;
+using Fantasy.Helper;
+// ReSharper disable UnusedParameter.Global
+
 #pragma warning disable CS8602 // Dereference of a possibly null reference.
 #pragma warning disable CS8625 // Cannot convert null literal to non-nullable reference type.
 
-namespace Fantasy
+namespace Fantasy.Timer
 {
+    /// <summary>
+    /// 基于系统事件的任务调度系统
+    /// </summary>
     public sealed class TimerSchedulerNet
     {
         private readonly Scene _scene;
@@ -15,6 +23,10 @@ namespace Fantasy
         private readonly Dictionary<long, TimerAction> _timerActions = new Dictionary<long, TimerAction>();
         private readonly SortedOneToManyList<long, long> _timeId = new(); // 时间与计时器ID的有序一对多列表
         private long GetId => ++_idGenerator;
+        /// <summary>
+        /// 构造函数
+        /// </summary>
+        /// <param name="scene">当前的Scene</param>
         public TimerSchedulerNet(Scene scene)
         {
             _scene = scene;
@@ -25,6 +37,9 @@ namespace Fantasy
             return TimeHelper.Now;
         }
         
+        /// <summary>
+        /// 驱动方法，只有调用这个方法任务系统才会正常运转。
+        /// </summary>
         public void Update()
         {
             if (_timeId.Count == 0)
@@ -82,8 +97,8 @@ namespace Fantasy
                 {
                     case TimerType.OnceWaitTimer:
                     {
-                        var tcs = timerAction.Callback as FTask;
-                        tcs.SetResult();
+                        var tcs = (FTask<bool>)timerAction.Callback;
+                        tcs.SetResult(true);
                         break;
                     }
                     case TimerType.OnceTimer:
@@ -125,97 +140,102 @@ namespace Fantasy
                 _minTime = tillTime;
             }
         }
-        
+
         /// <summary>
         /// 异步等待指定时间。
         /// </summary>
         /// <param name="time">等待的时间长度。</param>
+        /// <param name="cancellationToken">取消令牌。</param>
         /// <returns>等待是否成功。</returns>
-        public async FTask WaitAsync(long time)
+        public async FTask<bool> WaitAsync(long time, FCancellationToken cancellationToken = null)
         {
             if (time <= 0)
             {
-                return;
+                return true;
             }
-            
+
             var now = Now();
             var timerId = GetId;
-            var tcs = FTask.Create();
+            var tcs = FTask<bool>.Create();
             var timerAction = new TimerAction(timerId, TimerType.OnceWaitTimer, now, time, tcs);
-            AddTimer(ref timerAction);
-            
+
             void CancelActionVoid()
             {
                 if (Remove(timerId))
                 {
-                    tcs.SetResult();
+                    tcs.SetResult(false);
                 }
             }
 
-            var cancellationToken = await FTask.GetUserTokenAsync<FCancellationToken>();
-            
+            bool result;
+
             try
             {
                 cancellationToken?.Add(CancelActionVoid);
-                await tcs;
+                AddTimer(ref timerAction);
+                result = await tcs;
             }
             finally
             {
                 cancellationToken?.Remove(CancelActionVoid);
             }
+
+            return result;
         }
-        
+
         /// <summary>
         /// 异步等待直到指定时间。
         /// </summary>
         /// <param name="tillTime">等待的目标时间。</param>
+        /// <param name="cancellationToken">取消令牌。</param>
         /// <returns>等待是否成功。</returns>
-        public async FTask WaitTillAsync(long tillTime)
+        public async FTask<bool> WaitTillAsync(long tillTime, FCancellationToken cancellationToken = null)
         {
             var now = Now();
 
             if (now >= tillTime)
             {
-                return;
+                return true;
             }
 
             var timerId = GetId;
-            var tcs = FTask.Create();
+            var tcs = FTask<bool>.Create();
             var timerAction = new TimerAction(timerId, TimerType.OnceWaitTimer, now, tillTime - now, tcs);
-            AddTimer(ref timerAction);
             
-            // 定义取消操作的方法
             void CancelActionVoid()
             {
                 if (Remove(timerId))
                 {
-                    tcs.SetResult();
+                    tcs.SetResult(false);
                 }
             }
             
-            var cancellationToken = await FTask.GetUserTokenAsync<FCancellationToken>();
-            
+            bool result;
+
             try
             {
                 cancellationToken?.Add(CancelActionVoid);
-                await tcs;
+                AddTimer(ref timerAction);
+                result = await tcs;
             }
             finally
             {
                 cancellationToken?.Remove(CancelActionVoid);
             }
+
+            return result;
         }
 
         /// <summary>
         /// 异步等待一帧时间。
         /// </summary>
         /// <returns>等待是否成功。</returns>
-        public FTask WaitFrameAsync()
+        public async FTask WaitFrameAsync()
         {
 #if FANTASY_NET
-            return WaitAsync(100);
+            await WaitAsync(100);
 #else
-            return WaitAsync(0);
+            await WaitAsync(1);
 #endif
         }
 
@@ -229,7 +249,7 @@ namespace Fantasy
         {
             var now = Now();
             var timerId = GetId;
-            var timerAction = new TimerAction(timerId,TimerType.OnceTimer, now, time, action);
+            var timerAction = new TimerAction(timerId, TimerType.OnceTimer, now, time, action);
             AddTimer(ref timerAction);
             return timerId;
         }
@@ -311,7 +331,7 @@ namespace Fantasy
         /// <returns>计时器的 ID。</returns>
         public long RepeatedTimer(long time, Action action)
         {
-            if (time < 100)
+            if (time < 0)
             {
                 Log.Error($"time too small: {time}");
                 return 0;

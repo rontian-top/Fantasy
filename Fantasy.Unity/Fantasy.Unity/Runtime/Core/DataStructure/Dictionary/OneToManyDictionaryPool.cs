@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Fantasy.Pool;
+
 #pragma warning disable CS8603
 #pragma warning disable CS8601
 
-namespace Fantasy
+namespace Fantasy.DataStructure.Dictionary
 {
     /// <summary>
     /// 一对多映射关系的字典对象池。
@@ -14,10 +16,7 @@ namespace Fantasy
     /// <typeparam name="TValue">内部字典中的值类型。</typeparam>
     public class OneToManyDictionaryPool<TKey, TValueKey, TValue> : OneToManyDictionary<TKey, TValueKey, TValue>, IDisposable, IPool where TKey : notnull where TValueKey : notnull
     {
-        /// <summary>
-        /// 是否是池
-        /// </summary>
-        public bool IsPool { get; set; }
+        private bool _isPool;
         private bool _isDispose;
 
         /// <summary>
@@ -32,7 +31,7 @@ namespace Fantasy
             var a = MultiThreadPool.Rent<OneToManyDictionaryPool<TKey, TValueKey, TValue>>();
 #endif
             a._isDispose = false;
-            a.IsPool = true;
+            a._isPool = true;
             return a;
         }
 
@@ -53,6 +52,24 @@ namespace Fantasy
 #else
             MultiThreadPool.Return(this);
 #endif
+        }
+
+        /// <summary>
+        /// 获取一个值，该值指示当前实例是否为对象池中的实例。
+        /// </summary>
+        /// <returns></returns>
+        public bool IsPool()
+        {
+            return _isPool;
+        }
+
+        /// <summary>
+        /// 设置一个值，该值指示当前实例是否为对象池中的实例。
+        /// </summary>
+        /// <param name="isPool"></param>
+        public void SetIsPool(bool isPool)
+        {
+            _isPool = isPool;
         }
     }
 

@@ -1,16 +1,24 @@
 using System;
 using System.IO;
 using System.Runtime.CompilerServices;
-using MessagePack;
+using System.Runtime.InteropServices;
+using Fantasy.Helper;
+using Fantasy.Network;
+using Fantasy.Network.Interface;
+using Fantasy.PacketParser.Interface;
+using Fantasy.Serialize;
 
 // ReSharper disable ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
 #pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
 #pragma warning disable CS8625 // Cannot convert null literal to non-nullable reference type.
 
-namespace Fantasy
+namespace Fantasy.PacketParser
 {
-    public abstract class ReadOnlyMemoryPacketParser : APacketParser
+    internal abstract class ReadOnlyMemoryPacketParser : APacketParser
     {
+        /// <summary>
+        /// 一个网络消息包
+        /// </summary>
         protected APackInfo PackInfo;
 
         protected int Offset;
@@ -37,7 +45,7 @@ namespace Fantasy
     }
 
 #if FANTASY_NET
-    public sealed class InnerReadOnlyMemoryPacketParser : ReadOnlyMemoryPacketParser
+    internal sealed class InnerReadOnlyMemoryPacketParser : ReadOnlyMemoryPacketParser
     {
         public override unsafe bool UnPack(ref ReadOnlyMemory<byte> buffer, out APackInfo packInfo)
         {
@@ -75,11 +83,10 @@ namespace Fantasy
                         }
 
                         PackInfo = InnerPackInfo.Create(Network);
-                        var memoryStream = PackInfo.RentMemoryStream(Packet.InnerPacketHeadLength + MessagePacketLength);
+                        var memoryStream = PackInfo.RentMemoryStream(MemoryStreamBufferSource.UnPack, Packet.InnerPacketHeadLength + MessagePacketLength);
                         PackInfo.RpcId = *(uint*)(messagePtr + Packet.InnerPacketRpcIdLocation);
                         PackInfo.ProtocolCode = *(uint*)(messagePtr + Packet.PacketLength);
                         PackInfo.RouteId = *(long*)(messagePtr + Packet.InnerPacketRouteRouteIdLocation);
-                        PackInfo.MessagePacketLength = MessagePacketLength;
                         memoryStream.Write(MessageHead);
                         IsUnPackHead = false;
                         bufferLength -= copyLength;
@@ -91,6 +98,16 @@ namespace Fantasy
                         return false;
                     }
                 }
+            }
+
+            if (MessagePacketLength == -1)
+            {
+                // protoBuf做了一个优化、就是当序列化的对象里的属性和字段都为默认值的时候就不会序列化任何东西。
+                // 为了TCP的分包和粘包、需要判定下是当前包数据不完整还是本应该如此、所以用-1代表。
+                packInfo = PackInfo;
+                PackInfo = null;
+                IsUnPackHead = true;
+                return true;
             }
 
             if (bufferLength == 0)
@@ -120,70 +137,72 @@ namespace Fantasy
             return false;
         }
 
-        public override MemoryStreamBuffer Pack(ref uint rpcId, ref long routeTypeOpCode, ref long routeId, MemoryStreamBuffer memoryStream, object message)
+        public override MemoryStreamBuffer Pack(ref uint rpcId, ref long routeId, MemoryStreamBuffer memoryStream, IMessage message)
         {
-            return memoryStream == null
-                ? Pack(ref rpcId, ref routeId, message)
-                : Pack(ref rpcId, ref routeId, memoryStream);
+            return memoryStream == null ? Pack(ref rpcId, ref routeId, message) : Pack(ref rpcId, ref routeId, memoryStream);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private MemoryStreamBuffer Pack(ref uint rpcId, ref long routeId, MemoryStreamBuffer memoryStream)
+        private unsafe MemoryStreamBuffer Pack(ref uint rpcId, ref long routeId, MemoryStreamBuffer memoryStream)
         {
-            memoryStream.Seek(Packet.InnerPacketRpcIdLocation, SeekOrigin.Begin);
-            rpcId.GetBytes(RpcIdBuffer);
-            routeId.GetBytes(RouteIdBuffer);
-            memoryStream.Write(RpcIdBuffer);
-            memoryStream.Write(RouteIdBuffer);
-            memoryStream.Seek(0, SeekOrigin.Begin);
+            fixed (byte* bufferPtr = memoryStream.GetBuffer())
+            {
+                *(uint*)(bufferPtr + Packet.InnerPacketRpcIdLocation) = rpcId;
+                *(long*)(bufferPtr + Packet.InnerPacketRouteRouteIdLocation) = routeId;
+            }
+            
             return memoryStream;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private MemoryStreamBuffer Pack(ref uint rpcId, ref long routeId, object message)
+        private unsafe MemoryStreamBuffer Pack(ref uint rpcId, ref long routeId, IMessage message)
         {
+            var memoryStreamLength = 0;
             var messageType = message.GetType();
-            var memoryStream = Network.RentMemoryStream();
+            var memoryStream = Network.MemoryStreamBufferPool.RentMemoryStream(MemoryStreamBufferSource.Pack);
+            OpCodeIdStruct opCodeIdStruct = message.OpCode();
             memoryStream.Seek(Packet.InnerPacketHeadLength, SeekOrigin.Begin);
 
-            switch (message)
+            if (SerializerManager.TryGetSerializer(opCodeIdStruct.OpCodeProtocolType, out var serializer))
             {
-                case IBsonMessage:
-                {
-                    BsonPackHelper.Serialize(messageType, message, memoryStream);
-                    break;
-                }
-                default:
-                {
-                    MessagePackHelper.Serialize(messageType, message, memoryStream);
-                    break;
-                }
+                serializer.Serialize(messageType, message, memoryStream);
+                memoryStreamLength = (int)memoryStream.Position;
+            }
+            else
+            {
+                Log.Error($"type:{messageType} Does not support processing protocol");
             }
 
             var opCode = Scene.MessageDispatcherComponent.GetOpCode(messageType);
-            var packetBodyCount = (int)(memoryStream.Length - Packet.InnerPacketHeadLength);
+            var packetBodyCount = memoryStreamLength - Packet.InnerPacketHeadLength;
+            
+            if (packetBodyCount == 0)
+            {
+                // protoBuf做了一个优化、就是当序列化的对象里的属性和字段都为默认值的时候就不会序列化任何东西。
+                // 为了TCP的分包和粘包、需要判定下是当前包数据不完整还是本应该如此、所以用-1代表。
+                // 其实可以不用设置-1、解包的时候判断如果是0也可以、但我仔细想了下，还是用-1代表更加清晰。
+                packetBodyCount = -1;
+            }
             
             if (packetBodyCount > Packet.PacketBodyMaxLength)
             {
                 // 检查消息体长度是否超出限制
                 throw new Exception($"Message content exceeds {Packet.PacketBodyMaxLength} bytes");
             }
-
-            rpcId.GetBytes(RpcIdBuffer);
-            opCode.GetBytes(OpCodeBuffer);
-            routeId.GetBytes(RouteIdBuffer);
-            packetBodyCount.GetBytes(BodyBuffer);
-            memoryStream.Seek(0, SeekOrigin.Begin);
-            memoryStream.Write(BodyBuffer);
-            memoryStream.Write(OpCodeBuffer);
-            memoryStream.Write(RpcIdBuffer);
-            memoryStream.Write(RouteIdBuffer);
-            memoryStream.Seek(0, SeekOrigin.Begin);
+            
+            fixed (byte* bufferPtr = memoryStream.GetBuffer())
+            {
+                *(int*)bufferPtr = packetBodyCount;
+                *(uint*)(bufferPtr + Packet.PacketLength) = opCode;
+                *(uint*)(bufferPtr + Packet.InnerPacketRpcIdLocation) = rpcId;
+                *(long*)(bufferPtr + Packet.InnerPacketRouteRouteIdLocation) = routeId;
+            }
+            
             return memoryStream;
         }
     }
 #endif
-    public sealed class OuterReadOnlyMemoryPacketParser : ReadOnlyMemoryPacketParser
+    internal sealed class OuterReadOnlyMemoryPacketParser : ReadOnlyMemoryPacketParser
     {
         public override unsafe bool UnPack(ref ReadOnlyMemory<byte> buffer, out APackInfo packInfo)
         {
@@ -221,11 +240,9 @@ namespace Fantasy
                         }
 
                         PackInfo = OuterPackInfo.Create(Network);
-                        var memoryStream = PackInfo.RentMemoryStream(Packet.OuterPacketHeadLength + MessagePacketLength);
-                        PackInfo.MessagePacketLength = MessagePacketLength;
                         PackInfo.ProtocolCode = *(uint*)(messagePtr + Packet.PacketLength);
                         PackInfo.RpcId = *(uint*)(messagePtr + Packet.OuterPacketRpcIdLocation);
-                        PackInfo.RouteTypeCode = *(long*)(messagePtr + Packet.OuterPacketRouteTypeOpCodeLocation);
+                        var memoryStream = PackInfo.RentMemoryStream(MemoryStreamBufferSource.UnPack, Packet.OuterPacketHeadLength + MessagePacketLength);
                         memoryStream.Write(MessageHead);
                         IsUnPackHead = false;
                         bufferLength -= copyLength;
@@ -237,6 +254,16 @@ namespace Fantasy
                         return false;
                     }
                 }
+            }
+            
+            if (MessagePacketLength == -1)
+            {
+                // protoBuf做了一个优化、就是当序列化的对象里的属性和字段都为默认值的时候就不会序列化任何东西。
+                // 为了TCP的分包和粘包、需要判定下是当前包数据不完整还是本应该如此、所以用-1代表。
+                packInfo = PackInfo;
+                PackInfo = null;
+                IsUnPackHead = true;
+                return true;
             }
 
             if (bufferLength == 0)
@@ -266,51 +293,64 @@ namespace Fantasy
             return false;
         }
 
-        public override MemoryStreamBuffer Pack(ref uint rpcId, ref long routeTypeOpCode, ref long routeId, MemoryStreamBuffer memoryStream, object message)
+        public override MemoryStreamBuffer Pack(ref uint rpcId, ref long routeId, MemoryStreamBuffer memoryStream, IMessage message)
         {
-            return memoryStream == null
-                ? Pack(ref rpcId, ref routeTypeOpCode, message)
-                : Pack(ref rpcId, ref routeTypeOpCode, memoryStream);
+            return memoryStream == null ? Pack(ref rpcId, message) : Pack(ref rpcId, memoryStream);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private MemoryStreamBuffer Pack(ref uint rpcId, ref long routeTypeOpCode, MemoryStreamBuffer memoryStream)
+        private unsafe MemoryStreamBuffer Pack(ref uint rpcId, MemoryStreamBuffer memoryStream)
         {
-            memoryStream.Seek(Packet.OuterPacketRpcIdLocation, SeekOrigin.Begin);
-            rpcId.GetBytes(RpcIdBuffer);
-            routeTypeOpCode.GetBytes(PackRouteTypeOpCode);
-            memoryStream.Write(RpcIdBuffer);
-            memoryStream.Write(PackRouteTypeOpCode);
-            memoryStream.Seek(0, SeekOrigin.Begin);
+            fixed (byte* bufferPtr = memoryStream.GetBuffer())
+            {
+                *(uint*)(bufferPtr + Packet.OuterPacketRpcIdLocation) = rpcId;
+            }
+            
             return memoryStream;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private MemoryStreamBuffer Pack(ref uint rpcId, ref long routeTypeOpCode, object message)
+        private unsafe MemoryStreamBuffer Pack(ref uint rpcId, IMessage message)
         {
+            var memoryStreamLength = 0;
             var messageType = message.GetType();
-            var memoryStream = Network.RentMemoryStream();
+            var memoryStream = Network.MemoryStreamBufferPool.RentMemoryStream(MemoryStreamBufferSource.Pack);
+            OpCodeIdStruct opCodeIdStruct = message.OpCode();
             memoryStream.Seek(Packet.OuterPacketHeadLength, SeekOrigin.Begin);
-            MessagePackHelper.Serialize(messageType, message, memoryStream);
+            
+            if (SerializerManager.TryGetSerializer(opCodeIdStruct.OpCodeProtocolType, out var serializer))
+            {
+                serializer.Serialize(messageType, message, memoryStream);
+                memoryStreamLength = (int)memoryStream.Position;
+            }
+            else
+            {
+                Log.Error($"type:{messageType} Does not support processing protocol");
+            }
+            
             var opCode = Scene.MessageDispatcherComponent.GetOpCode(messageType);
-            var packetBodyCount = (int)(memoryStream.Length - Packet.OuterPacketHeadLength);
+            var packetBodyCount = memoryStreamLength - Packet.OuterPacketHeadLength;
+
+            if (packetBodyCount == 0)
+            {
+                // protoBuf做了一个优化、就是当序列化的对象里的属性和字段都为默认值的时候就不会序列化任何东西。
+                // 为了TCP的分包和粘包、需要判定下是当前包数据不完整还是本应该如此、所以用-1代表。
+                packetBodyCount = -1;
+            }
             
             if (packetBodyCount > Packet.PacketBodyMaxLength)
             {
                 // 检查消息体长度是否超出限制
                 throw new Exception($"Message content exceeds {Packet.PacketBodyMaxLength} bytes");
             }
-
-            rpcId.GetBytes(RpcIdBuffer);
-            opCode.GetBytes(OpCodeBuffer);
-            packetBodyCount.GetBytes(BodyBuffer);
-            routeTypeOpCode.GetBytes(PackRouteTypeOpCode);
-            memoryStream.Seek(0, SeekOrigin.Begin);
-            memoryStream.Write(BodyBuffer);
-            memoryStream.Write(OpCodeBuffer);
-            memoryStream.Write(RpcIdBuffer);
-            memoryStream.Write(PackRouteTypeOpCode);
-            memoryStream.Seek(0, SeekOrigin.Begin);
+            
+            fixed (byte* bufferPtr = memoryStream.GetBuffer())
+            {
+                *(int*)bufferPtr = packetBodyCount;
+                *(uint*)(bufferPtr + Packet.PacketLength) = opCode;
+                *(uint*)(bufferPtr + Packet.OuterPacketRpcIdLocation) = rpcId;
+            }
+            
             return memoryStream;
         }
     }

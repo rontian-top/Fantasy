@@ -1,3 +1,9 @@
+using System;
+using Fantasy.Async;
+using Fantasy.Network;
+using Fantasy.Network.Interface;
+using Fantasy.Platform.Net;
+
 namespace Fantasy;
 
 public sealed class C2G_CreateChatRouteRequestHandler : MessageRPC<C2G_CreateChatRouteRequest, G2C_CreateChatRouteResponse>
@@ -19,7 +25,7 @@ public sealed class C2G_CreateChatRouteRequestHandler : MessageRPC<C2G_CreateCha
         var routeResponse = (Chat2G_CreateRouteResponse)await networkMessagingComponent.CallInnerRoute(chatRouteId,
             new G2Chat_CreateRouteRequest()
             {
-                GateRouteId = session.RunTimeId
+                GateRouteId = session.RuntimeId
             });
         if (routeResponse.ErrorCode != 0)
         {

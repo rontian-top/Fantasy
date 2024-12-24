@@ -1,17 +1,21 @@
-#if !FANTASY_NET
+#if !FANTASY_NET && !FANTASY_CONSOLE
 using System;
 using System.Collections.Generic;
 using System.IO;
+using Fantasy.Helper;
+using Fantasy.Network.Interface;
+using Fantasy.PacketParser;
+using Fantasy.Serialize;
 using UnityWebSocket;
 
-namespace Fantasy
+namespace Fantasy.Network.WebSocket
 {
     // 因为webgl的限制、注定这个要是在游戏主线程里。所以这个库不会再其他线程执行的。
     // WebGL:在WebGL环境下运行
     // 另外不是运行在WebGL环境下，也没必要使用WebSocket协议了。完全可以使用TCP或KCP运行。同样也不会有那个队列产生的GC。
     public class WebSocketClientNetwork : AClientNetwork
     {
-        private WebSocket _webSocket;
+        private UnityWebSocket.WebSocket _webSocket;
         private bool _isInnerDispose;
         private bool _isConnected;
         private long _connectTimeoutId;
@@ -34,13 +38,13 @@ namespace Fantasy
             {
                 return;
             }
-
+            
             _isInnerDispose = true;
             base.Dispose();
             
             if (_webSocket != null && _webSocket.ReadyState != WebSocketState.Closed)
             {
-                OnConnectDisconnect(this, null);
+                _onConnectDisconnect?.Invoke();
                 _webSocket.CloseAsync();
             }
             
@@ -68,23 +72,17 @@ namespace Fantasy
                 Dispose();
             });
             var webSocketAddress = WebSocketHelper.GetWebSocketAddress(remoteAddress, isHttps);
-            _webSocket = new WebSocket(webSocketAddress);
+            _webSocket = new UnityWebSocket.WebSocket(webSocketAddress);
             _webSocket.OnOpen += OnNetworkConnectComplete;
             _webSocket.OnMessage += OnReceiveComplete;
-            _webSocket.OnClose += OnConnectDisconnect;
+            _webSocket.OnClose += (sender, args) =>
+            {
+                _onConnectDisconnect?.Invoke();
+                Dispose();
+            };
             _webSocket.ConnectAsync();
             Session = Session.Create(this, null);
             return Session;
-        }
-        
-        private void OnConnectDisconnect(object sender, CloseEventArgs e)
-        {
-            if (IsDisposed)
-            {
-                return;
-            }
-            
-            _onConnectDisconnect?.Invoke();
         }
 
         private void OnNetworkConnectComplete(object sender, OpenEventArgs e)
@@ -132,14 +130,14 @@ namespace Fantasy
 
         #region Send
 
-        public override void Send(uint rpcId, long routeTypeOpCode, long routeId, MemoryStreamBuffer memoryStream, object message)
+        public override void Send(uint rpcId, long routeId, MemoryStreamBuffer memoryStream, IMessage message)
         {
             if (IsDisposed)
             {
                 return;
             }
             
-            var buffer = _packetParser.Pack(ref rpcId, ref routeTypeOpCode, ref routeId, memoryStream, message);
+            var buffer = _packetParser.Pack(ref rpcId, ref routeId, memoryStream, message);
             
             if (!_isConnected)
             {
@@ -152,11 +150,13 @@ namespace Fantasy
         
         private void Send(MemoryStreamBuffer memoryStream)
         {
-            _webSocket.SendAsync(memoryStream.GetBuffer(), 0, (int)memoryStream.Length);
+            _webSocket.SendAsync(memoryStream.GetBuffer(), 0, (int)memoryStream.Position);
 #if !UNITY_EDITOR && UNITY_WEBGL
-            ReturnMemoryStream(memoryStream);
+            if (memoryStream.MemoryStreamBufferSource == MemoryStreamBufferSource.Pack)
+            {
+                MemoryStreamBufferPool.ReturnMemoryStream(memoryStream);
+            }
 #endif
-            
         }
 
         #endregion
