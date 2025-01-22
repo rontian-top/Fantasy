@@ -21,8 +21,6 @@ namespace Fantasy.DataBase
     {
         private const int DefaultTaskSize = 1024;
         private Scene _scene;
-        private string _dbName;
-        private string _connectionString;
         private MongoClient _mongoClient;
         private ISerialize _serializer;
         private IMongoDatabase _mongoDatabase;
@@ -32,15 +30,13 @@ namespace Fantasy.DataBase
         /// <summary>
         /// 初始化 MongoDB 数据库连接并记录所有集合名。
         /// </summary>
-        /// <param name="scene">所在的Scene。</param>
+        /// <param name="scene">场景对象。</param>
         /// <param name="connectionString">数据库连接字符串。</param>
         /// <param name="dbName">数据库名称。</param>
         /// <returns>初始化后的数据库实例。</returns>
         public IDataBase Initialize(Scene scene, string connectionString, string dbName)
         {
             _scene = scene;
-            _dbName = dbName;
-            _connectionString = connectionString;
             _mongoClient = new MongoClient(connectionString);
             _mongoDatabase = _mongoClient.GetDatabase(dbName);
             _dataBaseLock = scene.CoroutineLockComponent.Create(GetType().TypeHandle.Value.ToInt64());
@@ -48,6 +44,22 @@ namespace Fantasy.DataBase
             _collections.UnionWith(_mongoDatabase.ListCollectionNames().ToList());
             _serializer = SerializerManager.GetSerializer(FantasySerializerType.Bson);
             return this;
+        }
+        
+        /// <summary>
+        /// 销毁释放资源。
+        /// </summary>
+        public void Dispose()
+        {
+            // 优先释放协程锁。
+            _dataBaseLock.Dispose();
+            // 清理资源。
+            _scene = null;
+            _serializer = null;
+            _mongoDatabase = null;
+            _dataBaseLock = null;
+            _collections.Clear();
+            _mongoClient.Dispose();
         }
 
         #region Other
@@ -629,11 +641,11 @@ namespace Fantasy.DataBase
         {
             using (await _dataBaseLock.Wait(RandomHelper.RandInt64() % DefaultTaskSize))
             {
-                var projection = Builders<T>.Projection.Include(cols[0]);
+                var projection = Builders<T>.Projection.Include("_id");
 
-                for (var i = 1; i < cols.Length; i++)
+                foreach (var t in cols)
                 {
-                    projection = projection.Include(cols[i]);
+                    projection = projection.Include(t);
                 }
 
                 var list = await GetCollection<T>(collection).Find(filter).Project<T>(projection).ToListAsync();
@@ -648,6 +660,47 @@ namespace Fantasy.DataBase
                     entity.Deserialize(_scene);
                 }
                 
+                return list;
+            }
+        }
+
+        /// <summary>
+        /// 根据指定过滤条件查询并返回满足条件的文档列表，选择指定的列（加锁）。
+        /// </summary>
+        /// <param name="filter">文档实体类型。</param>
+        /// <param name="cols">查询过滤条件。</param>
+        /// <param name="isDeserialize">要查询的列名称数组。</param>
+        /// <param name="collection">是否在查询后反序列化,执行反序列化后会自动将实体注册到框架系统中，并且能正常使用组件相关功能。</param>
+        /// <typeparam name="T">集合名称。</typeparam>
+        /// <returns></returns>
+        public async FTask<List<T>> Query<T>(Expression<Func<T, bool>> filter, Expression<Func<T, object>>[] cols, bool isDeserialize = false, string collection = null) where T : Entity
+        {
+            using (await _dataBaseLock.Wait(RandomHelper.RandInt64() % DefaultTaskSize))
+            {
+                var projection = Builders<T>.Projection.Include("_id");
+
+                foreach (var col in cols)
+                {
+                    if (col.Body is not MemberExpression memberExpression)
+                    {
+                        throw new ArgumentException("Lambda expression must be a member access expression.");
+                    }
+
+                    projection = projection.Include(memberExpression.Member.Name);
+                }
+
+                var list = await GetCollection<T>(collection).Find(filter).Project<T>(projection).ToListAsync();
+
+                if (!isDeserialize || list is not { Count: > 0 })
+                {
+                    return list;
+                }
+
+                foreach (var entity in list)
+                {
+                    entity.Deserialize(_scene);
+                }
+
                 return list;
             }
         }
@@ -781,11 +834,11 @@ namespace Fantasy.DataBase
                 return;
             }
 
-            T clone = _serializer.Clone(entity);
+            var clone = _serializer.Clone(entity);
             
             using (await _dataBaseLock.Wait(entity.Id))
             {
-                await GetCollection<T>(collection).InsertOneAsync(entity);
+                await GetCollection<T>(collection).InsertOneAsync(clone);
             }
         }
 

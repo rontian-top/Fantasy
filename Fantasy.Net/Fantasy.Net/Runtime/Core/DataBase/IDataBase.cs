@@ -12,7 +12,7 @@ namespace Fantasy.DataBase
     /// <summary>
     /// 表示用于执行各种数据库操作的数据库接口。
     /// </summary>
-    public interface IDataBase
+    public interface IDataBase : IDisposable
     {
         /// <summary>
         /// 初始化数据库连接。
@@ -78,6 +78,10 @@ namespace Fantasy.DataBase
         /// 从指定集合中按页查询满足给定筛选条件的类型 <typeparamref name="T"/> 的实体列表。
         /// </summary>
         FTask<List<T>> Query<T>(Expression<Func<T, bool>> filter, bool isDeserialize = false, string collection = null) where T : Entity;
+        /// <summary>
+        /// 查询指定集合中满足给定筛选条件的类型 <typeparamref name="T"/> 实体列表，仅返回指定字段的数据。
+        /// </summary>
+        FTask<List<T>> Query<T>(Expression<Func<T, bool>> filter, Expression<Func<T, object>>[] cols, bool isDeserialize = false, string collection = null) where T : Entity;
         /// <summary>
         /// 查询指定 ID 的多个集合，将结果存储在给定的实体列表中。
         /// </summary>
